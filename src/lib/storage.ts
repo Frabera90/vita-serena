@@ -223,6 +223,7 @@ export type MenopauseStage =
   | "unknown";
 
 export interface UserProfile {
+  name: string | null;
   stage: MenopauseStage;
   birthYear: number | null;
   lastPeriodDate: string | null;
@@ -232,6 +233,7 @@ export interface UserProfile {
 }
 
 export const defaultProfile = (): UserProfile => ({
+  name: null,
   stage: "unknown",
   birthYear: null,
   lastPeriodDate: null,

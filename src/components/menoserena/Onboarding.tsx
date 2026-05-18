@@ -101,7 +101,12 @@ export function Onboarding({ onComplete }: Props) {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 py-8 max-w-lg mx-auto w-full">
-        {step === 0 && <StepWelcome />}
+        {step === 0 && (
+        <StepWelcome
+          name={draft.name ?? null}
+          onNameChange={(n) => setDraft((d) => ({ ...d, name: n || null }))}
+        />
+      )}
         {step === 1 && (
           <StepStage
             value={draft.stage ?? null}
@@ -156,7 +161,13 @@ export function Onboarding({ onComplete }: Props) {
 
 // ─── Steps ────────────────────────────────────────────────────────────────────
 
-function StepWelcome() {
+function StepWelcome({
+  name,
+  onNameChange,
+}: {
+  name: string | null;
+  onNameChange: (n: string) => void;
+}) {
   return (
     <div className="flex flex-col items-center text-center gap-5 pt-6">
       <div className="text-6xl">🌸</div>
@@ -166,9 +177,35 @@ function StepWelcome() {
           Il primo diario della perimenopausa in italiano. Gentile, privato, sempre gratuito.
         </p>
       </div>
-      <div className="flex flex-col gap-3 w-full mt-4">
+
+      {/* Name input */}
+      <div className="w-full">
+        <label className="block text-sm font-semibold mb-2 text-left" style={{ color: "var(--color-muted-foreground)" }}>
+          Come ti chiami? <span className="font-normal">(opzionale)</span>
+        </label>
+        <input
+          type="text"
+          placeholder="Il tuo nome"
+          value={name ?? ""}
+          onChange={(e) => onNameChange(e.target.value)}
+          autoComplete="given-name"
+          className="w-full rounded-2xl border px-4 py-3.5 text-[15px] outline-none text-center"
+          style={{
+            background: "var(--color-card)",
+            borderColor: "var(--color-border)",
+            color: "var(--color-foreground)",
+          }}
+        />
+        {name && (
+          <p className="text-[12.5px] mt-2 text-center" style={{ color: "var(--color-primary)" }}>
+            Ciao {name.trim().split(" ")[0]} 👋 Iniziamo.
+          </p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-3 w-full">
         {[
-          { emoji: "🔒", text: "I dati restano solo sul tuo telefono" },
+          { emoji: "🔒", text: "I dati restano sul tuo telefono" },
           { emoji: "🇮🇹", text: "Pensato per le donne italiane" },
           { emoji: "🩺", text: "Report per il ginecologo incluso" },
         ].map((item) => (
@@ -371,12 +408,29 @@ function StepNotification({
   onChange: (v: string | null) => void;
 }) {
   const enabled = value !== null;
+  const [notifPerm, setNotifPerm] = useState<NotificationPermission | "unsupported">(
+    typeof window !== "undefined" && "Notification" in window
+      ? Notification.permission
+      : "unsupported"
+  );
+
+  const requestPermission = async () => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    const perm = await Notification.requestPermission();
+    setNotifPerm(perm);
+    if (perm === "granted") {
+      new Notification("MenoSerena 🌿", {
+        body: "Perfetto! Ti ricorderemo di registrare ogni giorno.",
+        icon: "/icon-192.png",
+      });
+    }
+  };
 
   return (
     <div>
       <h2 className="text-2xl mb-2">Promemoria serale</h2>
       <p className="text-[14.5px] mb-6" style={{ color: "var(--color-muted-foreground)" }}>
-        Ti ricordiamo di registrare quando apri l'app dopo quest'ora. Nessuna notifica push — tutto dentro l'app.
+        Scegli un orario. Ti mandiamo una notifica se non hai ancora registrato.
       </p>
 
       <div className="ms-card mb-4">
@@ -385,9 +439,7 @@ function StepNotification({
           <button
             onClick={() => onChange(enabled ? null : "21:00")}
             className="relative h-7 w-12 rounded-full transition-colors duration-200"
-            style={{
-              background: enabled ? "var(--color-primary)" : "var(--color-muted)",
-            }}
+            style={{ background: enabled ? "var(--color-primary)" : "var(--color-muted)" }}
           >
             <span
               className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all duration-200"
@@ -397,25 +449,46 @@ function StepNotification({
         </div>
 
         {enabled && (
-          <div>
-            <label className="block text-sm font-medium mb-2">A che ora?</label>
-            <input
-              type="time"
-              value={value ?? "21:00"}
-              onChange={(e) => onChange(e.target.value || "21:00")}
-              className="w-full rounded-xl border px-4 py-3 text-base outline-none"
-              style={{
-                background: "var(--color-card)",
-                borderColor: "var(--color-border)",
-                color: "var(--color-foreground)",
-              }}
-            />
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="block text-sm font-medium mb-2">A che ora?</label>
+              <input
+                type="time"
+                value={value ?? "21:00"}
+                onChange={(e) => onChange(e.target.value || "21:00")}
+                className="w-full rounded-xl border px-4 py-3 text-base outline-none"
+                style={{
+                  background: "var(--color-card)",
+                  borderColor: "var(--color-border)",
+                  color: "var(--color-foreground)",
+                }}
+              />
+            </div>
+
+            {notifPerm !== "unsupported" && notifPerm !== "granted" && (
+              <button
+                onClick={requestPermission}
+                className="w-full rounded-2xl py-3 text-[14px] font-semibold transition-all active:scale-[0.98]"
+                style={{
+                  background: "color-mix(in oklab, var(--color-primary) 12%, var(--color-card))",
+                  border: "1.5px solid color-mix(in oklab, var(--color-primary) 30%, transparent)",
+                  color: "var(--color-primary)",
+                }}
+              >
+                🔔 Abilita notifiche sul telefono
+              </button>
+            )}
+            {notifPerm === "granted" && (
+              <p className="text-[12.5px] text-center" style={{ color: "var(--color-primary)" }}>
+                ✓ Notifiche abilitate
+              </p>
+            )}
           </div>
         )}
       </div>
 
       <p className="text-[12.5px] text-center" style={{ color: "var(--color-muted-foreground)" }}>
-        🔒 Nessun dato esce dal tuo dispositivo. Il promemoria è solo visivo, non una notifica push.
+        Puoi cambiare o disabilitare il promemoria in qualsiasi momento dal Profilo.
       </p>
     </div>
   );

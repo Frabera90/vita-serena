@@ -20,8 +20,11 @@ import { StreakBadge } from "@/components/menoserena/StreakBadge";
 import { ReminderBanner } from "@/components/menoserena/ReminderBanner";
 import { DoctorQuestions } from "@/components/menoserena/DoctorQuestions";
 import { BreathingExercise } from "@/components/menoserena/BreathingExercise";
+import { ContextualGreeting } from "@/components/menoserena/ContextualGreeting";
+import { AIInsight } from "@/components/menoserena/AIInsight";
 import {
   emptyEntry,
+  hasData,
   loadEntry,
   loadProfile,
   saveEntry,
@@ -56,15 +59,6 @@ export const Route = createFileRoute("/")({
   component: Home,
 });
 
-function formatItalianDate(d: Date): string {
-  return d
-    .toLocaleDateString("it-IT", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-    })
-    .replace(/^\w/, (c) => c.toUpperCase());
-}
 
 function Home() {
   const [tab, setTab] = useState<AppTab>("today");
@@ -89,6 +83,36 @@ function Home() {
     setProfile(p);
     setShowOnboarding(false);
   };
+
+  // Fire a browser notification at the user's chosen reminder time (app must be open)
+  useEffect(() => {
+    if (!profile?.notificationTime || typeof window === "undefined") return;
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+
+    const [hh, mm] = profile.notificationTime.split(":").map(Number);
+    const schedule = () => {
+      const now = new Date();
+      const target = new Date();
+      target.setHours(hh, mm, 0, 0);
+      if (target <= now) target.setDate(target.getDate() + 1);
+      return window.setTimeout(() => {
+        const todayEntry = loadEntry(todayKey());
+        if (!hasData(todayEntry)) {
+          navigator.serviceWorker?.ready.then((reg) => {
+            reg.showNotification("MenoSerena 🌿", {
+              body: "Non hai ancora registrato oggi. Ci vogliono 2 minuti.",
+              icon: "/icon-192.png",
+              tag: "menoserena-daily",
+            });
+          });
+        }
+        schedule(); // reschedule for next day
+      }, target.getTime() - now.getTime());
+    };
+
+    const id = schedule();
+    return () => window.clearTimeout(id);
+  }, [profile?.notificationTime]);
 
   const setFlow = (flow: Flow) => setEntry((e) => ({ ...e, flow }));
   const toggleSymptom = (k: SymptomKey) =>
@@ -118,30 +142,22 @@ function Home() {
       <main className="mx-auto max-w-2xl px-4 pt-5 pb-28">
         {tab === "today" && (
           <>
-            <header className="mb-4 px-1">
-              <p
-                className="text-[12.5px] font-semibold tracking-wider uppercase"
-                style={{ color: "var(--color-sage-deep)" }}
-              >
-                {formatItalianDate(new Date())}
-              </p>
-              <div className="flex items-center justify-between mt-1">
-                <h1 className="text-3xl" style={{ color: "var(--color-foreground)" }}>
-                  Ciao. Come va oggi?
-                </h1>
-                <StreakBadge />
-              </div>
-              <p
-                className="text-[14.5px] mt-1.5"
-                style={{ color: "var(--color-muted-foreground)" }}
-              >
-                Prenditi un momento. Tu capisci il tuo corpo meglio di chiunque.
-              </p>
-            </header>
+            <ContextualGreeting
+              name={profile?.name ?? null}
+              entry={entry}
+              onToggle={toggleSymptom}
+              onSleepChange={setSleep}
+            />
+
+            <div className="px-1 mb-2 flex justify-end">
+              <StreakBadge />
+            </div>
 
             {profile && <ReminderBanner profile={profile} />}
 
-            <div className="flex flex-col gap-4 mt-4">
+            <AIInsight name={profile?.name ?? null} />
+
+            <div className="flex flex-col gap-4 mt-2">
               <SleepTracker sleep={entry.sleep} onChange={setSleep} />
               <FlowTracker value={entry.flow} onChange={setFlow} />
               <SymptomGrid selected={entry.symptoms} onToggle={toggleSymptom} />

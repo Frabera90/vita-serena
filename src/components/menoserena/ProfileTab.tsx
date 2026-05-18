@@ -114,6 +114,26 @@ export function ProfileTab() {
       </div>
 
       <section className="ms-card flex flex-col gap-5">
+        {/* Name */}
+        <div>
+          <label className="block text-[13px] font-semibold mb-1.5" style={{ color: "var(--color-muted-foreground)" }}>
+            Come ti chiami?
+          </label>
+          <input
+            type="text"
+            placeholder="Il tuo nome"
+            autoComplete="given-name"
+            value={profile.name ?? ""}
+            onChange={(e) => update("name", e.target.value || null)}
+            className="w-full rounded-xl px-3.5 py-2.5 text-[14px] outline-none"
+            style={{
+              background: "var(--color-muted)",
+              border: "1.5px solid var(--color-border)",
+              color: "var(--color-foreground)",
+            }}
+          />
+        </div>
+
         {/* Stage */}
         <div>
           <p className="text-[13px] font-semibold mb-2" style={{ color: "var(--color-muted-foreground)" }}>
