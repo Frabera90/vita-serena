@@ -10,7 +10,8 @@ import { Remedies } from "@/components/menoserena/Remedies";
 import { PDFReport } from "@/components/menoserena/PDFReport";
 import { BottomNav } from "@/components/menoserena/BottomNav";
 import { PremiumCTA } from "@/components/menoserena/PremiumCTA";
-import { ComingSoon } from "@/components/menoserena/ComingSoon";
+import { History } from "@/components/menoserena/History";
+import { Insights } from "@/components/menoserena/Insights";
 import {
   emptyEntry,
   loadEntry,
@@ -124,23 +125,9 @@ function Home() {
           </>
         )}
 
-        {tab === "history" && (
-          <div className="pt-8">
-            <ComingSoon
-              title="Cronologia"
-              desc="Vedrai i tuoi pattern degli ultimi 30, 90 e 365 giorni. Arriva presto."
-            />
-          </div>
-        )}
+        {tab === "history" && <History />}
 
-        {tab === "insights" && (
-          <div className="pt-8">
-            <ComingSoon
-              title="Insights"
-              desc="Correlazioni tra rimedi e sintomi, generate sul tuo telefono. Privato e potente."
-            />
-          </div>
-        )}
+        {tab === "insights" && <Insights />}
       </main>
 
       <BottomNav active={tab} onChange={setTab} />
