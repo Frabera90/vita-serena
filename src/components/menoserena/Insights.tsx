@@ -1,25 +1,91 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { Calendar, Lightbulb, Moon, TrendingDown, TrendingUp } from "lucide-react";
-import { loadAllEntries } from "@/lib/storage";
+import { loadAllEntries, loadEntriesForRange } from "@/lib/storage";
 import { SYMPTOMS } from "@/components/menoserena/SymptomGrid";
+
+const RANGES = [
+  { label: "30 gg", days: 30 },
+  { label: "90 gg", days: 90 },
+  { label: "365 gg", days: 365 },
+];
 
 const DAY_NAMES = ["Dom", "Lun", "Mar", "Mer", "Gio", "Ven", "Sab"];
 
+const SHORT: Record<string, string> = {
+  vampata: "Vampata", sudorazione_notturna: "Sudor. nott.", ansia: "Ansia",
+  sbalzi_umore: "Sbalzi", irritabilita: "Irritab.", umore_depresso: "Depresso",
+  pianto_facile: "Pianto", attacco_panico: "Panico", nebbia: "Nebbia",
+  stanchezza: "Stanchezza", mal_di_testa: "Testa", capogiri: "Capogiri",
+  palpitazioni: "Palpitaz.", formicolio: "Formicol.", prurito: "Prurito",
+  secchezza_pelle: "Pelle secca", perdita_capelli: "Capelli", acne: "Acne",
+  gonfiore: "Gonfiore", nausea: "Nausea", costipazione: "Costip.",
+  fame: "Voglie", secchezza_vaginale: "Secch. vag.", dolore_rapporti: "Dolore rapp.",
+  bassa_libido: "Libido", incontinenza: "Incontinen.", scosse_elettriche: "Scosse",
+  acufeni: "Acufeni", bruciore_bocca: "Bocca", occhi_secchi: "Occhi secchi",
+};
+
+const CHART_PRIMARY = "oklch(0.52 0.08 155)";
+const CHART_ACCENT = "oklch(0.68 0.13 40)";
+
 export function Insights() {
-  const entries = useMemo(() => loadAllEntries(), []);
+  const [range, setRange] = useState(30);
+  const rangeEntries = useMemo(() => loadEntriesForRange(range), [range]);
+  const allEntries = useMemo(() => loadAllEntries(), []);
+
+  const symptomBarData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const e of rangeEntries)
+      for (const s of e.symptoms) counts[s] = (counts[s] || 0) + 1;
+    return SYMPTOMS.map((s) => ({ name: SHORT[s.key] ?? s.key, count: counts[s.key] || 0 }))
+      .filter((s) => s.count > 0)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  }, [rangeEntries]);
+
+  const trendLineData = useMemo(
+    () =>
+      [...rangeEntries]
+        .reverse()
+        .map((e) => ({
+          date: e.date.slice(5),
+          sintomi: e.symptoms.length,
+        })),
+    [rangeEntries]
+  );
+
+  const sleepLineData = useMemo(
+    () =>
+      [...rangeEntries]
+        .reverse()
+        .filter((e) => e.sleep.hours !== null)
+        .map((e) => ({
+          date: e.date.slice(5),
+          ore: e.sleep.hours,
+        })),
+    [rangeEntries]
+  );
 
   const stats = useMemo(() => {
-    if (entries.length < 3) return null;
+    if (allEntries.length < 3) return null;
 
-    // Top symptom
     const symptomCounts: Record<string, number> = {};
-    for (const e of entries)
+    for (const e of allEntries)
       for (const s of e.symptoms) symptomCounts[s] = (symptomCounts[s] || 0) + 1;
     const topSymptom = Object.entries(symptomCounts).sort((a, b) => b[1] - a[1])[0] ?? null;
 
-    // Day of week patterns
     const dayBuckets: Record<number, { total: number; count: number }> = {};
-    for (const e of entries) {
+    for (const e of allEntries) {
       const day = new Date(e.date + "T12:00:00").getDay();
       if (!dayBuckets[day]) dayBuckets[day] = { total: 0, count: 0 };
       dayBuckets[day].total += e.symptoms.length;
@@ -32,18 +98,14 @@ export function Insights() {
     const hardestDay = [...dayAvgs].sort((a, b) => b.avg - a.avg)[0]?.day ?? null;
     const easiestDay = [...dayAvgs].sort((a, b) => a.avg - b.avg)[0]?.day ?? null;
 
-    // Flow vs symptoms
-    const withFlow = entries.filter((e) => e.flow !== null && e.flow !== "dry");
-    const dry = entries.filter((e) => e.flow === "dry");
+    const withFlow = allEntries.filter((e) => e.flow !== null && e.flow !== "dry");
+    const dry = allEntries.filter((e) => e.flow === "dry");
     const avgFlow = withFlow.length > 0
-      ? withFlow.reduce((s, e) => s + e.symptoms.length, 0) / withFlow.length
-      : null;
+      ? withFlow.reduce((s, e) => s + e.symptoms.length, 0) / withFlow.length : null;
     const avgDry = dry.length > 0
-      ? dry.reduce((s, e) => s + e.symptoms.length, 0) / dry.length
-      : null;
+      ? dry.reduce((s, e) => s + e.symptoms.length, 0) / dry.length : null;
 
-    // Sleep quality vs symptoms
-    const withSleep = entries.filter((e) => e.sleep.quality !== null && e.symptoms.length >= 0);
+    const withSleep = allEntries.filter((e) => e.sleep.quality !== null);
     let sleepCorrelation: "bad_sleep_more_symptoms" | "no_correlation" | null = null;
     if (withSleep.length >= 5) {
       const goodSleep = withSleep.filter((e) => (e.sleep.quality ?? 0) >= 4);
@@ -58,26 +120,20 @@ export function Insights() {
         sleepCorrelation = "no_correlation";
     }
 
-    // Average sleep hours
-    const sleepEntries = entries.filter((e) => e.sleep.hours !== null);
+    const sleepEntries = allEntries.filter((e) => e.sleep.hours !== null);
     const avgSleepHours = sleepEntries.length > 0
-      ? sleepEntries.reduce((s, e) => s + (e.sleep.hours ?? 0), 0) / sleepEntries.length
-      : null;
+      ? sleepEntries.reduce((s, e) => s + (e.sleep.hours ?? 0), 0) / sleepEntries.length : null;
 
-    // Caffeine/alcohol trigger analysis
-    const caffeineEntries = entries.filter((e) => e.context.caffeine);
-    const noCaffeineEntries = entries.filter((e) => !e.context.caffeine && e.symptoms.length >= 0);
+    const caffeineEntries = allEntries.filter((e) => e.context.caffeine);
+    const noCaffeineEntries = allEntries.filter((e) => !e.context.caffeine);
     const avgWithCaffeine = caffeineEntries.length >= 3
-      ? caffeineEntries.reduce((s, e) => s + e.symptoms.length, 0) / caffeineEntries.length
-      : null;
+      ? caffeineEntries.reduce((s, e) => s + e.symptoms.length, 0) / caffeineEntries.length : null;
     const avgNoCaffeine = noCaffeineEntries.length >= 3
-      ? noCaffeineEntries.reduce((s, e) => s + e.symptoms.length, 0) / noCaffeineEntries.length
-      : null;
+      ? noCaffeineEntries.reduce((s, e) => s + e.symptoms.length, 0) / noCaffeineEntries.length : null;
 
-    // Trend: last 7 vs previous 7
     const now = Date.now();
-    const last7 = entries.filter((e) => now - new Date(e.date + "T12:00:00").getTime() < 7 * 86400000);
-    const prev7 = entries.filter((e) => {
+    const last7 = allEntries.filter((e) => now - new Date(e.date + "T12:00:00").getTime() < 7 * 86400000);
+    const prev7 = allEntries.filter((e) => {
       const diff = now - new Date(e.date + "T12:00:00").getTime();
       return diff >= 7 * 86400000 && diff < 14 * 86400000;
     });
@@ -87,22 +143,13 @@ export function Insights() {
       ? prev7.reduce((s, e) => s + e.symptoms.length, 0) / prev7.length : null;
 
     return {
-      topSymptom,
-      hardestDay,
-      easiestDay,
-      avgFlow,
-      avgDry,
-      sleepCorrelation,
-      avgSleepHours,
-      avgWithCaffeine,
-      avgNoCaffeine,
-      last7Avg,
-      prev7Avg,
-      total: entries.length,
+      topSymptom, hardestDay, easiestDay, avgFlow, avgDry,
+      sleepCorrelation, avgSleepHours, avgWithCaffeine, avgNoCaffeine,
+      last7Avg, prev7Avg, total: allEntries.length,
     };
-  }, [entries]);
+  }, [allEntries]);
 
-  if (!stats) {
+  if (allEntries.length < 3) {
     return (
       <div className="pt-8 px-1">
         <h2 className="text-2xl mb-2">Insights</h2>
@@ -113,24 +160,128 @@ export function Insights() {
     );
   }
 
-  const topSym = stats.topSymptom
+  const topSym = stats?.topSymptom
     ? SYMPTOMS.find((s) => s.key === stats.topSymptom![0])
     : null;
   const trendImproving =
-    stats.last7Avg !== null && stats.prev7Avg !== null && stats.last7Avg < stats.prev7Avg - 0.2;
+    stats?.last7Avg !== null && stats?.prev7Avg !== null &&
+    (stats?.last7Avg ?? 0) < (stats?.prev7Avg ?? 0) - 0.2;
   const trendWorsening =
-    stats.last7Avg !== null && stats.prev7Avg !== null && stats.last7Avg > stats.prev7Avg + 0.2;
+    stats?.last7Avg !== null && stats?.prev7Avg !== null &&
+    (stats?.last7Avg ?? 0) > (stats?.prev7Avg ?? 0) + 0.2;
 
   return (
-    <div className="pt-6 flex flex-col gap-4 px-1">
+    <div className="pt-6 flex flex-col gap-5 px-1">
       <div>
         <h2 className="text-2xl mb-1">Insights</h2>
         <p className="text-sm" style={{ color: "var(--color-muted-foreground)" }}>
-          Elaborati sul tuo dispositivo · {stats.total} registrazioni
+          Elaborati sul tuo dispositivo · {allEntries.length} registrazioni
         </p>
       </div>
 
-      {/* Weekly trend */}
+      {/* Range selector */}
+      <div className="flex gap-2">
+        {RANGES.map((r) => (
+          <button
+            key={r.days}
+            onClick={() => setRange(r.days)}
+            className="rounded-full px-4 py-1.5 text-[13px] font-semibold transition-all"
+            style={{
+              background: range === r.days
+                ? "var(--color-primary)"
+                : "var(--color-muted)",
+              color: range === r.days ? "white" : "var(--color-muted-foreground)",
+            }}
+          >
+            {r.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Symptom frequency chart */}
+      {symptomBarData.length > 0 && (
+        <section className="ms-card">
+          <h3 className="font-semibold text-[14.5px] mb-4">Sintomi più frequenti</h3>
+          <ResponsiveContainer width="100%" height={symptomBarData.length * 28 + 16}>
+            <BarChart
+              data={symptomBarData}
+              layout="vertical"
+              margin={{ top: 0, right: 8, left: 0, bottom: 0 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border)" />
+              <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+              <YAxis
+                type="category"
+                dataKey="name"
+                width={80}
+                tick={{ fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+              />
+              <Tooltip
+                contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--color-border)" }}
+                formatter={(v: number) => [`${v} volte`, "Frequenza"]}
+              />
+              <Bar dataKey="count" fill={CHART_ACCENT} radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </section>
+      )}
+
+      {/* Symptom trend over time */}
+      {trendLineData.length > 2 && (
+        <section className="ms-card">
+          <h3 className="font-semibold text-[14.5px] mb-4">Sintomi nel tempo</h3>
+          <ResponsiveContainer width="100%" height={160}>
+            <LineChart data={trendLineData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+              <XAxis dataKey="date" tick={{ fontSize: 10 }} tickLine={false} interval="preserveStartEnd" />
+              <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
+              <Tooltip
+                contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--color-border)" }}
+                formatter={(v: number) => [v, "Sintomi"]}
+              />
+              <Line
+                type="monotone"
+                dataKey="sintomi"
+                stroke={CHART_PRIMARY}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </section>
+      )}
+
+      {/* Sleep chart */}
+      {sleepLineData.length > 2 && (
+        <section className="ms-card">
+          <h3 className="font-semibold text-[14.5px] mb-4">Ore di sonno</h3>
+          <ResponsiveContainer width="100%" height={160}>
+            <LineChart data={sleepLineData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+              <XAxis dataKey="date" tick={{ fontSize: 10 }} tickLine={false} interval="preserveStartEnd" />
+              <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 12]} />
+              <Tooltip
+                contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--color-border)" }}
+                formatter={(v: number) => [`${v}h`, "Sonno"]}
+              />
+              <Line
+                type="monotone"
+                dataKey="ore"
+                stroke={CHART_PRIMARY}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </section>
+      )}
+
+      {/* ── Statistical insight cards ── */}
+
       {(trendImproving || trendWorsening) && (
         <div className="ms-card flex items-start gap-3">
           {trendImproving ? (
@@ -151,8 +302,7 @@ export function Insights() {
         </div>
       )}
 
-      {/* Top symptom */}
-      {topSym && stats.topSymptom && (
+      {topSym && stats?.topSymptom && (
         <div className="ms-card flex items-start gap-3">
           <span className="text-2xl leading-none">{topSym.emoji}</span>
           <div>
@@ -164,8 +314,7 @@ export function Insights() {
         </div>
       )}
 
-      {/* Sleep correlation */}
-      {stats.sleepCorrelation === "bad_sleep_more_symptoms" && (
+      {stats?.sleepCorrelation === "bad_sleep_more_symptoms" && (
         <div className="ms-card flex items-start gap-3">
           <Moon className="h-5 w-5 mt-0.5 shrink-0" style={{ color: "var(--color-primary)" }} />
           <div>
@@ -177,8 +326,7 @@ export function Insights() {
         </div>
       )}
 
-      {/* Average sleep */}
-      {stats.avgSleepHours !== null && (
+      {stats?.avgSleepHours !== null && stats?.avgSleepHours !== undefined && (
         <div className="ms-card flex items-start gap-3">
           <Moon className="h-5 w-5 mt-0.5 shrink-0" style={{ color: "var(--color-muted-foreground)" }} />
           <div>
@@ -195,9 +343,8 @@ export function Insights() {
         </div>
       )}
 
-      {/* Day of week pattern */}
-      {stats.hardestDay !== null &&
-        stats.easiestDay !== null &&
+      {stats?.hardestDay !== null && stats?.easiestDay !== null &&
+        stats?.hardestDay !== undefined && stats?.easiestDay !== undefined &&
         stats.hardestDay !== stats.easiestDay && (
           <div className="ms-card flex items-start gap-3">
             <Calendar className="h-5 w-5 mt-0.5 shrink-0" style={{ color: "var(--color-accent)" }} />
@@ -211,24 +358,23 @@ export function Insights() {
           </div>
         )}
 
-      {/* Flow correlation */}
-      {stats.avgFlow !== null && stats.avgDry !== null && (
-        <div className="ms-card flex items-start gap-3">
-          <Lightbulb className="h-5 w-5 mt-0.5 shrink-0" style={{ color: "var(--color-accent)" }} />
-          <div>
-            <div className="font-semibold text-[14.5px]">Flusso e sintomi</div>
-            <p className="text-sm mt-0.5" style={{ color: "var(--color-muted-foreground)" }}>
-              {stats.avgFlow > stats.avgDry
-                ? `Nei giorni con flusso hai in media ${(stats.avgFlow - stats.avgDry).toFixed(1)} sintomi in più rispetto ai giorni senza.`
-                : "Nei giorni senza flusso tendi ad avere più sintomi — tipico della perimenopausa."}
-            </p>
+      {stats?.avgFlow !== null && stats?.avgDry !== null &&
+        stats?.avgFlow !== undefined && stats?.avgDry !== undefined && (
+          <div className="ms-card flex items-start gap-3">
+            <Lightbulb className="h-5 w-5 mt-0.5 shrink-0" style={{ color: "var(--color-accent)" }} />
+            <div>
+              <div className="font-semibold text-[14.5px]">Flusso e sintomi</div>
+              <p className="text-sm mt-0.5" style={{ color: "var(--color-muted-foreground)" }}>
+                {stats.avgFlow > stats.avgDry
+                  ? `Nei giorni con flusso hai in media ${(stats.avgFlow - stats.avgDry).toFixed(1)} sintomi in più rispetto ai giorni senza.`
+                  : "Nei giorni senza flusso tendi ad avere più sintomi — tipico della perimenopausa."}
+              </p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Caffeine trigger */}
-      {stats.avgWithCaffeine !== null &&
-        stats.avgNoCaffeine !== null &&
+      {stats?.avgWithCaffeine !== null && stats?.avgNoCaffeine !== null &&
+        stats?.avgWithCaffeine !== undefined && stats?.avgNoCaffeine !== undefined &&
         stats.avgWithCaffeine > stats.avgNoCaffeine + 0.5 && (
           <div className="ms-card flex items-start gap-3">
             <Lightbulb className="h-5 w-5 mt-0.5 shrink-0" style={{ color: "var(--color-accent)" }} />
@@ -241,7 +387,7 @@ export function Insights() {
           </div>
         )}
 
-      <p className="text-[12px] text-center px-4 pt-1" style={{ color: "var(--color-muted-foreground)" }}>
+      <p className="text-[12px] text-center px-4 pt-1 pb-2" style={{ color: "var(--color-muted-foreground)" }}>
         Tutti i calcoli avvengono sul tuo dispositivo. Nessun dato viene inviato a server esterni.
       </p>
     </div>

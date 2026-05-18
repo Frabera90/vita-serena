@@ -166,3 +166,20 @@
 .recording {
   animation: pulse-record 1.4s ease-in-out infinite;
 }
+
+@keyframes breathe-in {
+  from { transform: scale(0.65); opacity: 0.7; }
+  to   { transform: scale(1.2);  opacity: 1; }
+}
+@keyframes breathe-hold {
+  from { transform: scale(1.2); opacity: 1; }
+  to   { transform: scale(1.2); opacity: 1; }
+}
+@keyframes breathe-out {
+  from { transform: scale(1.2); opacity: 1; }
+  to   { transform: scale(0.65); opacity: 0.7; }
+}
+
+.breathe-in   { animation: breathe-in  4s  ease-in-out forwards; }
+.breathe-hold { animation: breathe-hold 7s linear      forwards; }
+.breathe-out  { animation: breathe-out  8s  ease-in-out forwards; }

@@ -1,14 +1,17 @@
-import { CalendarDays, LineChart, Sparkles } from "lucide-react";
+import { CalendarDays, CalendarRange, Lightbulb, User } from "lucide-react";
+
+export type AppTab = "today" | "calendar" | "insights" | "profile";
 
 interface Props {
-  active: "today" | "history" | "insights";
-  onChange: (t: "today" | "history" | "insights") => void;
+  active: AppTab;
+  onChange: (t: AppTab) => void;
 }
 
-const TABS = [
-  { key: "today" as const, label: "Oggi", Icon: CalendarDays },
-  { key: "history" as const, label: "Cronologia", Icon: LineChart },
-  { key: "insights" as const, label: "Insights", Icon: Sparkles },
+const TABS: { key: AppTab; label: string; Icon: React.FC<{ className?: string; strokeWidth?: number }> }[] = [
+  { key: "today", label: "Oggi", Icon: CalendarDays },
+  { key: "calendar", label: "Calendario", Icon: CalendarRange },
+  { key: "insights", label: "Insights", Icon: Lightbulb },
+  { key: "profile", label: "Profilo", Icon: User },
 ];
 
 export function BottomNav({ active, onChange }: Props) {
@@ -21,7 +24,7 @@ export function BottomNav({ active, onChange }: Props) {
         paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
-      <div className="mx-auto grid max-w-2xl grid-cols-3">
+      <div className="mx-auto grid max-w-2xl grid-cols-4">
         {TABS.map(({ key, label, Icon }) => {
           const on = active === key;
           return (
@@ -34,7 +37,7 @@ export function BottomNav({ active, onChange }: Props) {
               }}
             >
               <Icon className="h-5 w-5" strokeWidth={on ? 2.4 : 1.8} />
-              <span className="text-[11.5px] font-semibold">{label}</span>
+              <span className="text-[10.5px] font-semibold">{label}</span>
             </button>
           );
         })}
