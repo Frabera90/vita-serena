@@ -156,7 +156,7 @@ function Home() {
               <Remedies />
               <DoctorQuestions />
               <BreathingExercise />
-              <PDFReport entry={entry} />
+              <PDFReport />
               <PremiumCTA />
             </div>
           </>

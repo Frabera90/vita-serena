@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
-import { Plus, Sparkles, X } from "lucide-react";
+import { Check, Plus, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
-import { loadRemedies, saveRemedies, type Remedy } from "@/lib/storage";
+import {
+  loadRemedies,
+  loadTakenRemedies,
+  saveRemedies,
+  saveTakenRemedies,
+  todayKey,
+  type Remedy,
+} from "@/lib/storage";
 
 const dayCount = (startDate: string): number => {
   const start = new Date(startDate + "T12:00:00");
@@ -11,11 +18,13 @@ const dayCount = (startDate: string): number => {
 
 export function Remedies() {
   const [remedies, setRemedies] = useState<Remedy[]>([]);
+  const [takenToday, setTakenToday] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
 
   useEffect(() => {
     setRemedies(loadRemedies());
+    setTakenToday(new Set(loadTakenRemedies(todayKey())));
   }, []);
 
   const add = () => {
@@ -35,6 +44,16 @@ export function Remedies() {
     const updated = remedies.filter((r) => r.id !== id);
     setRemedies(updated);
     saveRemedies(updated);
+  };
+
+  const toggleTaken = (id: string) => {
+    setTakenToday((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      saveTakenRemedies(todayKey(), [...next]);
+      return next;
+    });
   };
 
   return (
@@ -89,35 +108,69 @@ export function Remedies() {
           Nessun rimedio ancora. Tocca "Aggiungi" per iniziare a tracciare.
         </p>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {remedies.map((r) => (
-            <li
-              key={r.id}
-              className="flex items-center justify-between rounded-xl px-3.5 py-3"
-              style={{ background: "var(--color-muted)" }}
-            >
-              <span className="font-medium text-[14.5px]">{r.name}</span>
-              <div className="flex items-center gap-2">
-                <span
-                  className="rounded-full px-2.5 py-0.5 text-[12px] font-semibold"
+        <ul className="flex flex-col gap-2.5">
+          {remedies.map((r) => {
+            const taken = takenToday.has(r.id);
+            return (
+              <li
+                key={r.id}
+                className="flex items-center gap-2 rounded-xl px-3.5 py-3"
+                style={{ background: "var(--color-muted)" }}
+              >
+                {/* Taken toggle */}
+                <button
+                  onClick={() => toggleTaken(r.id)}
+                  className="shrink-0 flex items-center justify-center rounded-full transition-all active:scale-90"
                   style={{
-                    background: "var(--color-terracotta-soft)",
-                    color: "var(--color-accent)",
+                    width: 32,
+                    height: 32,
+                    background: taken
+                      ? "var(--color-primary)"
+                      : "color-mix(in oklab, var(--color-primary) 10%, var(--color-card))",
+                    border: `2px solid ${taken ? "var(--color-primary)" : "color-mix(in oklab, var(--color-primary) 30%, transparent)"}`,
                   }}
+                  aria-label={taken ? "Segna come non preso" : "Segna come preso"}
                 >
-                  Giorno {dayCount(r.startDate)}
-                </span>
+                  <Check
+                    className="h-4 w-4"
+                    style={{ color: taken ? "white" : "var(--color-primary)", opacity: taken ? 1 : 0.4 }}
+                  />
+                </button>
+
+                {/* Name + day count */}
+                <div className="flex-1 min-w-0">
+                  <span
+                    className="font-medium text-[14.5px] block truncate"
+                    style={{
+                      color: taken ? "var(--color-foreground)" : "var(--color-foreground)",
+                      opacity: taken ? 0.65 : 1,
+                    }}
+                  >
+                    {r.name}
+                  </span>
+                  <span className="text-[11.5px]" style={{ color: "var(--color-muted-foreground)" }}>
+                    {taken ? "Preso oggi · " : ""}Giorno {dayCount(r.startDate)}
+                  </span>
+                </div>
+
+                {/* Remove */}
                 <button
                   onClick={() => remove(r.id)}
-                  className="rounded-full p-1 transition-all active:scale-90 hover:opacity-60"
+                  className="shrink-0 rounded-full p-1 transition-all active:scale-90 hover:opacity-60"
                   aria-label="Rimuovi"
                 >
                   <X className="h-3.5 w-3.5" style={{ color: "var(--color-muted-foreground)" }} />
                 </button>
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
+      )}
+
+      {remedies.length > 0 && (
+        <p className="mt-3 text-[11.5px]" style={{ color: "var(--color-muted-foreground)" }}>
+          Tocca il cerchio per registrare l'assunzione di oggi. Tracciato nel report medico.
+        </p>
       )}
     </section>
   );

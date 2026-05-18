@@ -335,3 +335,34 @@ export const downloadCSV = () => {
   a.click();
   URL.revokeObjectURL(url);
 };
+
+// ─── Remedy Daily Tracking ────────────────────────────────────────────────────
+
+export const loadTakenRemedies = (date: string): string[] => {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`menoserena_taken_${date}`);
+    if (!raw) return [];
+    return JSON.parse(raw) as string[];
+  } catch {
+    return [];
+  }
+};
+
+export const saveTakenRemedies = (date: string, ids: string[]) => {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(`menoserena_taken_${date}`, JSON.stringify(ids));
+};
+
+export const calcRemedyCompliance = (remedyId: string, days: number): number => {
+  if (typeof window === "undefined") return 0;
+  let count = 0;
+  const today = new Date();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (loadTakenRemedies(key).includes(remedyId)) count++;
+  }
+  return count;
+};
