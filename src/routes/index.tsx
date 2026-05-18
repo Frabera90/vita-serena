@@ -12,15 +12,19 @@ import { BottomNav } from "@/components/menoserena/BottomNav";
 import { PremiumCTA } from "@/components/menoserena/PremiumCTA";
 import { History } from "@/components/menoserena/History";
 import { Insights } from "@/components/menoserena/Insights";
+import { SleepTracker } from "@/components/menoserena/SleepTracker";
+import { DailyWellness } from "@/components/menoserena/DailyWellness";
 import {
   emptyEntry,
   loadEntry,
   saveEntry,
   todayKey,
+  type ContextData,
   type DayEntry,
   type Flow,
   type Intensity,
   type PainArea,
+  type SleepData,
   type SymptomKey,
 } from "@/lib/storage";
 
@@ -36,7 +40,8 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "MenoSerena — Diario perimenopausa" },
       {
         property: "og:description",
-        content: "Privato, semplice, in italiano. Capisce i cicli caotici della perimenopausa.",
+        content:
+          "Privato, semplice, in italiano. Capisce i cicli caotici della perimenopausa.",
       },
     ],
   }),
@@ -81,6 +86,9 @@ function Home() {
     setEntry((e) => ({ ...e, notes: [...e.notes, n] }));
   const removeNote = (idx: number) =>
     setEntry((e) => ({ ...e, notes: e.notes.filter((_, i) => i !== idx) }));
+  const setSleep = (sleep: SleepData) => setEntry((e) => ({ ...e, sleep }));
+  const setWeight = (weight: number | null) => setEntry((e) => ({ ...e, weight }));
+  const setContext = (context: ContextData) => setEntry((e) => ({ ...e, context }));
 
   return (
     <>
@@ -95,10 +103,7 @@ function Home() {
               >
                 {formatItalianDate(new Date())}
               </p>
-              <h1
-                className="text-3xl mt-1"
-                style={{ color: "var(--color-foreground)" }}
-              >
+              <h1 className="text-3xl mt-1" style={{ color: "var(--color-foreground)" }}>
                 Ciao. Come va oggi?
               </h1>
               <p
@@ -110,14 +115,17 @@ function Home() {
             </header>
 
             <div className="flex flex-col gap-4">
+              <SleepTracker sleep={entry.sleep} onChange={setSleep} />
               <FlowTracker value={entry.flow} onChange={setFlow} />
-              <VoiceRecorder
-                notes={entry.notes}
-                onAdd={addNote}
-                onRemove={removeNote}
-              />
               <SymptomGrid selected={entry.symptoms} onToggle={toggleSymptom} />
               <PainMap map={entry.painMap} onChange={setPain} />
+              <DailyWellness
+                weight={entry.weight}
+                context={entry.context}
+                onWeightChange={setWeight}
+                onContextChange={setContext}
+              />
+              <VoiceRecorder notes={entry.notes} onAdd={addNote} onRemove={removeNote} />
               <Remedies />
               <PDFReport entry={entry} />
               <PremiumCTA />

@@ -2,8 +2,8 @@ import jsPDF from "jspdf";
 import { FileDown } from "lucide-react";
 import { toast } from "sonner";
 import type { DayEntry } from "@/lib/storage";
+import { loadRemedies } from "@/lib/storage";
 import { SYMPTOMS } from "./SymptomGrid";
-import { ACTIVE_REMEDIES } from "./Remedies";
 
 const FLOW_LABEL: Record<string, string> = {
   dry: "Nessun flusso / secco",
@@ -26,16 +26,45 @@ const INT_LABEL: Record<string, string> = {
   severe: "forte",
 };
 
+const QUALITY_LABEL = ["", "Pessimo", "Scarso", "Discreto", "Buono", "Ottimo"];
+const DISTURBANCE_LABEL: Record<string, string> = {
+  falling_asleep: "Difficile addormentarsi",
+  waking_up: "Risvegli notturni",
+  early_waking: "Sveglia troppo presto",
+  restless: "Sonno agitato",
+};
+const ACTIVITY_LABEL: Record<string, string> = {
+  none: "Nessuna",
+  light: "Leggera",
+  moderate: "Moderata",
+  intense: "Intensa",
+};
+const WATER_LABEL: Record<string, string> = {
+  low: "Poca",
+  medium: "Media",
+  high: "Tanta",
+};
+const STRESS_LABEL = ["", "Calma", "Ok", "Un po'", "Tanto", "Enorme"];
+
 interface Props {
   entry: DayEntry;
 }
 
 export function PDFReport({ entry }: Props) {
   const generate = () => {
+    const remedies = loadRemedies();
     const doc = new jsPDF({ unit: "pt", format: "a4" });
     const M = 48;
     let y = M;
     const W = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+
+    const checkPage = (needed = 40) => {
+      if (y + needed > pageH - 60) {
+        doc.addPage();
+        y = M;
+      }
+    };
 
     // Header
     doc.setFillColor(120, 145, 110);
@@ -48,10 +77,10 @@ export function PDFReport({ entry }: Props) {
     doc.setFont("helvetica", "normal");
     doc.text(`Data: ${entry.date}`, M, 58);
     y = 100;
-
     doc.setTextColor(40);
 
     const section = (title: string) => {
+      checkPage(50);
       y += 8;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(13);
@@ -65,14 +94,33 @@ export function PDFReport({ entry }: Props) {
     };
 
     const line = (txt: string) => {
+      checkPage(20);
       const wrapped = doc.splitTextToSize(txt, W - M * 2);
       doc.text(wrapped, M, y);
       y += wrapped.length * 14;
     };
 
+    // Flusso
     section("Flusso");
     line(entry.flow ? FLOW_LABEL[entry.flow] : "Non registrato");
 
+    // Sonno
+    section("Sonno");
+    if (entry.sleep.hours !== null) line(`Ore dormite: ${entry.sleep.hours}h`);
+    if (entry.sleep.quality !== null)
+      line(`Qualità: ${QUALITY_LABEL[entry.sleep.quality]} (${entry.sleep.quality}/5)`);
+    if (entry.sleep.disturbances.length > 0)
+      line(`Problemi: ${entry.sleep.disturbances.map((d) => DISTURBANCE_LABEL[d]).join(", ")}`);
+    if (!entry.sleep.hours && !entry.sleep.quality && entry.sleep.disturbances.length === 0)
+      line("Non registrato");
+
+    // Peso
+    if (entry.weight !== null) {
+      section("Peso");
+      line(`${entry.weight.toFixed(1)} kg`);
+    }
+
+    // Sintomi
     section("Sintomi");
     if (entry.symptoms.length === 0) line("Nessun sintomo registrato.");
     else
@@ -81,6 +129,7 @@ export function PDFReport({ entry }: Props) {
         if (s) line(`• ${s.label}`);
       });
 
+    // Mappa del dolore
     section("Mappa del dolore");
     const painLines = Object.entries(entry.painMap)
       .filter(([, v]) => v)
@@ -88,24 +137,45 @@ export function PDFReport({ entry }: Props) {
     if (painLines.length === 0) line("Nessun dolore registrato.");
     else painLines.forEach(line);
 
+    // Benessere
+    section("Benessere generale");
+    const c = entry.context;
+    if (c.stressLevel) line(`Stress: ${STRESS_LABEL[c.stressLevel]} (${c.stressLevel}/5)`);
+    if (c.activity) line(`Attività fisica: ${ACTIVITY_LABEL[c.activity]}`);
+    if (c.water) line(`Acqua: ${WATER_LABEL[c.water]}`);
+    const triggers = [c.caffeine && "Caffeina", c.alcohol && "Alcol"].filter(Boolean);
+    if (triggers.length > 0) line(`Trigger: ${triggers.join(", ")}`);
+    if (!c.stressLevel && !c.activity && !c.water && !c.caffeine && !c.alcohol)
+      line("Non registrato");
+
+    // Note
     section("Note");
     if (entry.notes.length === 0) line("Nessuna nota.");
-    else entry.notes.forEach((n) => line(`[${n.time}] ${n.kind === "voice" ? "🎤" : "✍️"} ${n.text}`));
+    else
+      entry.notes.forEach((n) =>
+        line(`[${n.time}] ${n.kind === "voice" ? "(Nota vocale)" : "(Nota scritta)"} ${n.text}`)
+      );
 
+    // Rimedi
     section("Rimedi in uso");
-    ACTIVE_REMEDIES.forEach((r) => line(`• ${r.name} — Giorno ${r.day}`));
+    if (remedies.length === 0) line("Nessun rimedio registrato.");
+    else {
+      const today = new Date();
+      remedies.forEach((r) => {
+        const days = Math.max(
+          1,
+          Math.floor((today.getTime() - new Date(r.startDate + "T12:00:00").getTime()) / 86400000) + 1
+        );
+        line(`• ${r.name} — Giorno ${days}`);
+      });
+    }
 
     // Footer
-    const pageH = doc.internal.pageSize.getHeight();
     doc.setDrawColor(220);
     doc.line(M, pageH - 50, W - M, pageH - 50);
     doc.setFontSize(9);
     doc.setTextColor(120);
-    doc.text(
-      "Dati salvati localmente sul dispositivo. Non condivisi con terzi.",
-      M,
-      pageH - 32
-    );
+    doc.text("Dati salvati localmente sul dispositivo. Non condivisi con terzi.", M, pageH - 32);
     doc.text("MenoSerena · per te, e per il tuo ginecologo.", M, pageH - 18);
 
     doc.save(`MenoSerena_Report_${entry.date}.pdf`);
@@ -113,12 +183,17 @@ export function PDFReport({ entry }: Props) {
   };
 
   return (
-    <section className="ms-card" style={{
-      background: "linear-gradient(135deg, color-mix(in oklab, var(--color-accent) 8%, var(--color-card)), var(--color-card))",
-    }}>
+    <section
+      className="ms-card"
+      style={{
+        background:
+          "linear-gradient(135deg, color-mix(in oklab, var(--color-accent) 8%, var(--color-card)), var(--color-card))",
+      }}
+    >
       <h2 className="text-xl mb-1.5">Report per il ginecologo</h2>
       <p className="text-sm mb-4" style={{ color: "var(--color-muted-foreground)" }}>
-        Dati concreti, non solo impressioni. Sempre <span className="font-semibold">gratis</span>.
+        Dati concreti, non solo impressioni. Sempre{" "}
+        <span className="font-semibold">gratis</span>.
       </p>
       <button
         onClick={generate}
@@ -126,7 +201,8 @@ export function PDFReport({ entry }: Props) {
         style={{
           background: "var(--color-accent)",
           color: "var(--color-accent-foreground)",
-          boxShadow: "0 10px 24px -10px color-mix(in oklab, var(--color-accent) 70%, transparent)",
+          boxShadow:
+            "0 10px 24px -10px color-mix(in oklab, var(--color-accent) 70%, transparent)",
         }}
       >
         <FileDown className="h-5 w-5" />

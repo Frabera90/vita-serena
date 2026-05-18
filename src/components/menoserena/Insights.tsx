@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Calendar, Lightbulb, TrendingDown, TrendingUp } from "lucide-react";
+import { Calendar, Lightbulb, Moon, TrendingDown, TrendingUp } from "lucide-react";
 import { loadAllEntries } from "@/lib/storage";
 import { SYMPTOMS } from "@/components/menoserena/SymptomGrid";
 
@@ -11,12 +11,13 @@ export function Insights() {
   const stats = useMemo(() => {
     if (entries.length < 3) return null;
 
+    // Top symptom
     const symptomCounts: Record<string, number> = {};
-    for (const e of entries) {
+    for (const e of entries)
       for (const s of e.symptoms) symptomCounts[s] = (symptomCounts[s] || 0) + 1;
-    }
     const topSymptom = Object.entries(symptomCounts).sort((a, b) => b[1] - a[1])[0] ?? null;
 
+    // Day of week patterns
     const dayBuckets: Record<number, { total: number; count: number }> = {};
     for (const e of entries) {
       const day = new Date(e.date + "T12:00:00").getDay();
@@ -31,27 +32,74 @@ export function Insights() {
     const hardestDay = [...dayAvgs].sort((a, b) => b.avg - a.avg)[0]?.day ?? null;
     const easiestDay = [...dayAvgs].sort((a, b) => a.avg - b.avg)[0]?.day ?? null;
 
+    // Flow vs symptoms
     const withFlow = entries.filter((e) => e.flow !== null && e.flow !== "dry");
     const dry = entries.filter((e) => e.flow === "dry");
-    const avgFlow =
-      withFlow.length > 0
-        ? withFlow.reduce((s, e) => s + e.symptoms.length, 0) / withFlow.length
-        : null;
-    const avgDry =
-      dry.length > 0
-        ? dry.reduce((s, e) => s + e.symptoms.length, 0) / dry.length
-        : null;
+    const avgFlow = withFlow.length > 0
+      ? withFlow.reduce((s, e) => s + e.symptoms.length, 0) / withFlow.length
+      : null;
+    const avgDry = dry.length > 0
+      ? dry.reduce((s, e) => s + e.symptoms.length, 0) / dry.length
+      : null;
 
+    // Sleep quality vs symptoms
+    const withSleep = entries.filter((e) => e.sleep.quality !== null && e.symptoms.length >= 0);
+    let sleepCorrelation: "bad_sleep_more_symptoms" | "no_correlation" | null = null;
+    if (withSleep.length >= 5) {
+      const goodSleep = withSleep.filter((e) => (e.sleep.quality ?? 0) >= 4);
+      const badSleep = withSleep.filter((e) => (e.sleep.quality ?? 5) <= 2);
+      const avgGood = goodSleep.length > 0
+        ? goodSleep.reduce((s, e) => s + e.symptoms.length, 0) / goodSleep.length : null;
+      const avgBad = badSleep.length > 0
+        ? badSleep.reduce((s, e) => s + e.symptoms.length, 0) / badSleep.length : null;
+      if (avgGood !== null && avgBad !== null && avgBad > avgGood + 0.5)
+        sleepCorrelation = "bad_sleep_more_symptoms";
+      else if (avgGood !== null && avgBad !== null)
+        sleepCorrelation = "no_correlation";
+    }
+
+    // Average sleep hours
+    const sleepEntries = entries.filter((e) => e.sleep.hours !== null);
+    const avgSleepHours = sleepEntries.length > 0
+      ? sleepEntries.reduce((s, e) => s + (e.sleep.hours ?? 0), 0) / sleepEntries.length
+      : null;
+
+    // Caffeine/alcohol trigger analysis
+    const caffeineEntries = entries.filter((e) => e.context.caffeine);
+    const noCaffeineEntries = entries.filter((e) => !e.context.caffeine && e.symptoms.length >= 0);
+    const avgWithCaffeine = caffeineEntries.length >= 3
+      ? caffeineEntries.reduce((s, e) => s + e.symptoms.length, 0) / caffeineEntries.length
+      : null;
+    const avgNoCaffeine = noCaffeineEntries.length >= 3
+      ? noCaffeineEntries.reduce((s, e) => s + e.symptoms.length, 0) / noCaffeineEntries.length
+      : null;
+
+    // Trend: last 7 vs previous 7
     const now = Date.now();
     const last7 = entries.filter((e) => now - new Date(e.date + "T12:00:00").getTime() < 7 * 86400000);
     const prev7 = entries.filter((e) => {
       const diff = now - new Date(e.date + "T12:00:00").getTime();
       return diff >= 7 * 86400000 && diff < 14 * 86400000;
     });
-    const last7Avg = last7.length > 0 ? last7.reduce((s, e) => s + e.symptoms.length, 0) / last7.length : null;
-    const prev7Avg = prev7.length > 0 ? prev7.reduce((s, e) => s + e.symptoms.length, 0) / prev7.length : null;
+    const last7Avg = last7.length > 0
+      ? last7.reduce((s, e) => s + e.symptoms.length, 0) / last7.length : null;
+    const prev7Avg = prev7.length > 0
+      ? prev7.reduce((s, e) => s + e.symptoms.length, 0) / prev7.length : null;
 
-    return { topSymptom, hardestDay, easiestDay, avgFlow, avgDry, last7Avg, prev7Avg, total: entries.length };
+    return {
+      topSymptom,
+      hardestDay,
+      easiestDay,
+      avgFlow,
+      avgDry,
+      sleepCorrelation,
+      avgSleepHours,
+      avgWithCaffeine,
+      avgNoCaffeine,
+      last7Avg,
+      prev7Avg,
+      total: entries.length,
+    };
   }, [entries]);
 
   if (!stats) {
@@ -59,25 +107,30 @@ export function Insights() {
       <div className="pt-8 px-1">
         <h2 className="text-2xl mb-2">Insights</h2>
         <p className="text-[14.5px]" style={{ color: "var(--color-muted-foreground)" }}>
-          Registra almeno 3 giornate per vedere i tuoi pattern. Tutto viene analizzato solo sul tuo dispositivo.
+          Registra almeno 3 giornate per vedere i tuoi pattern. Tutto viene elaborato solo sul tuo dispositivo.
         </p>
       </div>
     );
   }
 
-  const topSym = stats.topSymptom ? SYMPTOMS.find((s) => s.key === stats.topSymptom![0]) : null;
-  const trendImproving = stats.last7Avg !== null && stats.prev7Avg !== null && stats.last7Avg < stats.prev7Avg - 0.2;
-  const trendWorsening = stats.last7Avg !== null && stats.prev7Avg !== null && stats.last7Avg > stats.prev7Avg + 0.2;
+  const topSym = stats.topSymptom
+    ? SYMPTOMS.find((s) => s.key === stats.topSymptom![0])
+    : null;
+  const trendImproving =
+    stats.last7Avg !== null && stats.prev7Avg !== null && stats.last7Avg < stats.prev7Avg - 0.2;
+  const trendWorsening =
+    stats.last7Avg !== null && stats.prev7Avg !== null && stats.last7Avg > stats.prev7Avg + 0.2;
 
   return (
     <div className="pt-6 flex flex-col gap-4 px-1">
       <div>
         <h2 className="text-2xl mb-1">Insights</h2>
         <p className="text-sm" style={{ color: "var(--color-muted-foreground)" }}>
-          Elaborati sul tuo dispositivo su {stats.total} registrazioni
+          Elaborati sul tuo dispositivo · {stats.total} registrazioni
         </p>
       </div>
 
+      {/* Weekly trend */}
       {(trendImproving || trendWorsening) && (
         <div className="ms-card flex items-start gap-3">
           {trendImproving ? (
@@ -98,57 +151,97 @@ export function Insights() {
         </div>
       )}
 
+      {/* Top symptom */}
       {topSym && stats.topSymptom && (
         <div className="ms-card flex items-start gap-3">
           <span className="text-2xl leading-none">{topSym.emoji}</span>
           <div>
             <div className="font-semibold text-[14.5px]">Sintomo più presente</div>
             <p className="text-sm mt-0.5" style={{ color: "var(--color-muted-foreground)" }}>
-              <strong>{topSym.label}</strong> è comparso in {stats.topSymptom[1]} giornate registrate.
+              <strong>{topSym.label}</strong> è comparso in {stats.topSymptom[1]} giornate su {stats.total}.
             </p>
           </div>
         </div>
       )}
 
+      {/* Sleep correlation */}
+      {stats.sleepCorrelation === "bad_sleep_more_symptoms" && (
+        <div className="ms-card flex items-start gap-3">
+          <Moon className="h-5 w-5 mt-0.5 shrink-0" style={{ color: "var(--color-primary)" }} />
+          <div>
+            <div className="font-semibold text-[14.5px]">Sonno e sintomi correlati</div>
+            <p className="text-sm mt-0.5" style={{ color: "var(--color-muted-foreground)" }}>
+              Nelle giornate dopo un sonno scarso tendi ad avere più sintomi. Priorità al sonno.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Average sleep */}
+      {stats.avgSleepHours !== null && (
+        <div className="ms-card flex items-start gap-3">
+          <Moon className="h-5 w-5 mt-0.5 shrink-0" style={{ color: "var(--color-muted-foreground)" }} />
+          <div>
+            <div className="font-semibold text-[14.5px]">Media ore di sonno</div>
+            <p className="text-sm mt-0.5" style={{ color: "var(--color-muted-foreground)" }}>
+              Dormi in media <strong>{stats.avgSleepHours.toFixed(1)}h</strong>.
+              {stats.avgSleepHours < 6.5
+                ? " Meno di 7h è associato a più sintomi in perimenopausa."
+                : stats.avgSleepHours >= 7
+                ? " Ottimo — 7-9h è il range raccomandato."
+                : " Sei vicina al range raccomandato (7-9h)."}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Day of week pattern */}
       {stats.hardestDay !== null &&
         stats.easiestDay !== null &&
         stats.hardestDay !== stats.easiestDay && (
           <div className="ms-card flex items-start gap-3">
-            <Calendar
-              className="h-5 w-5 mt-0.5 shrink-0"
-              style={{ color: "var(--color-accent)" }}
-            />
+            <Calendar className="h-5 w-5 mt-0.5 shrink-0" style={{ color: "var(--color-accent)" }} />
             <div>
               <div className="font-semibold text-[14.5px]">Pattern settimanale</div>
               <p className="text-sm mt-0.5" style={{ color: "var(--color-muted-foreground)" }}>
                 <strong>{DAY_NAMES[stats.hardestDay]}</strong> è tendenzialmente il giorno più
-                difficile, mentre <strong>{DAY_NAMES[stats.easiestDay]}</strong> è il più sereno.
+                difficile, <strong>{DAY_NAMES[stats.easiestDay]}</strong> il più sereno.
               </p>
             </div>
           </div>
         )}
 
+      {/* Flow correlation */}
       {stats.avgFlow !== null && stats.avgDry !== null && (
         <div className="ms-card flex items-start gap-3">
-          <Lightbulb
-            className="h-5 w-5 mt-0.5 shrink-0"
-            style={{ color: "var(--color-accent)" }}
-          />
+          <Lightbulb className="h-5 w-5 mt-0.5 shrink-0" style={{ color: "var(--color-accent)" }} />
           <div>
             <div className="font-semibold text-[14.5px]">Flusso e sintomi</div>
             <p className="text-sm mt-0.5" style={{ color: "var(--color-muted-foreground)" }}>
               {stats.avgFlow > stats.avgDry
                 ? `Nei giorni con flusso hai in media ${(stats.avgFlow - stats.avgDry).toFixed(1)} sintomi in più rispetto ai giorni senza.`
-                : `Nei giorni senza flusso hai in media più sintomi — i sintomi della perimenopausa non seguono sempre il ciclo.`}
+                : "Nei giorni senza flusso tendi ad avere più sintomi — tipico della perimenopausa."}
             </p>
           </div>
         </div>
       )}
 
-      <p
-        className="text-[12px] text-center px-4 pt-1"
-        style={{ color: "var(--color-muted-foreground)" }}
-      >
+      {/* Caffeine trigger */}
+      {stats.avgWithCaffeine !== null &&
+        stats.avgNoCaffeine !== null &&
+        stats.avgWithCaffeine > stats.avgNoCaffeine + 0.5 && (
+          <div className="ms-card flex items-start gap-3">
+            <Lightbulb className="h-5 w-5 mt-0.5 shrink-0" style={{ color: "var(--color-accent)" }} />
+            <div>
+              <div className="font-semibold text-[14.5px]">Caffeina come trigger</div>
+              <p className="text-sm mt-0.5" style={{ color: "var(--color-muted-foreground)" }}>
+                Nei giorni con caffeina hai in media più sintomi. Potrebbe valere la pena ridurla.
+              </p>
+            </div>
+          </div>
+        )}
+
+      <p className="text-[12px] text-center px-4 pt-1" style={{ color: "var(--color-muted-foreground)" }}>
         Tutti i calcoli avvengono sul tuo dispositivo. Nessun dato viene inviato a server esterni.
       </p>
     </div>
