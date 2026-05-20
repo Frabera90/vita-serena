@@ -351,7 +351,7 @@ export function PainMap3D({ map, onChange }: Props) {
         {mounted && (
           <Canvas
             shadows
-            camera={{ position: [0, 0.5, 4], fov: 40 }}
+            camera={{ position: [0, 0.3, 3.6], fov: 40 }}
             dpr={[1, 2]}
           >
             <ambientLight intensity={0.6} />
@@ -368,7 +368,7 @@ export function PainMap3D({ map, onChange }: Props) {
               maxDistance={7}
               minPolarAngle={Math.PI / 6}
               maxPolarAngle={Math.PI - Math.PI / 6}
-              target={[0, 0.5, 0]}
+              target={[0, 0.3, 0]}
             />
           </Canvas>
         )}
