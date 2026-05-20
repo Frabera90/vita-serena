@@ -5,7 +5,7 @@ import { PrivacyBanner } from "@/components/menoserena/PrivacyBanner";
 import { FlowTracker } from "@/components/menoserena/FlowTracker";
 import { VoiceRecorder } from "@/components/menoserena/VoiceRecorder";
 import { SymptomGrid } from "@/components/menoserena/SymptomGrid";
-import { PainMap } from "@/components/menoserena/PainMap";
+import { PainMap3D } from "@/components/menoserena/PainMap3D";
 import { Remedies } from "@/components/menoserena/Remedies";
 import { PDFReport } from "@/components/menoserena/PDFReport";
 import { BottomNav, type AppTab } from "@/components/menoserena/BottomNav";
@@ -161,7 +161,7 @@ function Home() {
               <SleepTracker sleep={entry.sleep} onChange={setSleep} />
               <FlowTracker value={entry.flow} onChange={setFlow} />
               <SymptomGrid selected={entry.symptoms} onToggle={toggleSymptom} />
-              <PainMap map={entry.painMap} onChange={setPain} />
+              <PainMap3D map={entry.painMap} onChange={setPain} />
               <DailyWellness
                 weight={entry.weight}
                 context={entry.context}

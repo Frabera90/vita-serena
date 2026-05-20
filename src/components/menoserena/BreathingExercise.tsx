@@ -104,7 +104,7 @@ export function BreathingExercise() {
           <div className="relative flex items-center justify-center">
             <div
               className={`h-32 w-32 rounded-full transition-none ${
-                isRunning && phase !== "done" ? PHASE_CLASSES[phase] ?? "" : ""
+                isRunning ? PHASE_CLASSES[phase] ?? "" : ""
               }`}
               style={{
                 background: isRunning
