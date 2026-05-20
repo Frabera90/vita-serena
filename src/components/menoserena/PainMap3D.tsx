@@ -47,12 +47,12 @@ type Hotspot = {
 };
 
 const HOTSPOTS: Hotspot[] = [
-  { area: "neck", pos: [0, 1.55, 0.18], radius: 0.12 },
-  { area: "shoulders", pos: [0, 1.35, 0.15], radius: 0.22 },
-  { area: "chest", pos: [0, 1.05, 0.28], radius: 0.18 },
-  { area: "wrists", pos: [-0.55, 0.35, 0.1], radius: 0.13 },
-  { area: "lower_back", pos: [0, 0.55, -0.2], radius: 0.2 },
-  { area: "knees", pos: [0, -0.55, 0.18], radius: 0.18 },
+  { area: "neck", pos: [0, 1.55, 0.12], radius: 0.1 },
+  { area: "shoulders", pos: [0, 1.38, 0.18], radius: 0.2 },
+  { area: "chest", pos: [0, 1.13, 0.32], radius: 0.16 },
+  { area: "wrists", pos: [-0.54, 0.52, 0.1], radius: 0.11 },
+  { area: "lower_back", pos: [0, 0.72, -0.25], radius: 0.16 },
+  { area: "knees", pos: [0, -0.5, 0.16], radius: 0.16 },
 ];
 
 // Feminine torso silhouette via LatheGeometry — profile revolved around Y axis.
