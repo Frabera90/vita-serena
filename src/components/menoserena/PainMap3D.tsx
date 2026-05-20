@@ -121,7 +121,7 @@ function FemaleModel() {
   const scale = 2.6 / Math.max(height, 0.001);
 
   return (
-    <Center disableY top cacheKey="female-model">
+    <Center bottom cacheKey="female-model">
       <primitive object={processed} scale={scale} />
     </Center>
   );
